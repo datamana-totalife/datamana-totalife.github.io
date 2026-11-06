@@ -1531,4 +1531,23 @@ async function publish(){
  }catch(err){msg.textContent='';showDlg('<b>發佈沒有成功</b><br>'+err.message+'<br><br>可以先按「下載檔案」手動上傳。<br><button onclick="document.getElementById(\'dmdlg\').style.display=\'none\'">關閉</button>')}
 }
 })();
+</script>
+<script id="dm-auto">
+(function(){
+const q=new URLSearchParams(location.search);if(q.has('edit')||q.has('presenter'))return;
+let on=false,tm=null;const fixed=parseFloat(q.get('auto'))||0;
+const btn=document.createElement('button');btn.id='dmauto';
+btn.style.cssText="position:fixed;right:118px;top:14px;z-index:10;background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:20px;padding:8px 14px;font:600 13px 'Noto Sans TC',sans-serif;cursor:pointer;opacity:0;transition:opacity .3s";
+document.body.appendChild(btn);
+const st=document.createElement('style');st.textContent='body:hover #dmauto{opacity:1!important}';document.head.appendChild(st);
+function dur(){if(fixed)return fixed*1000;const t=(S[cur].innerText||'').replace(/\s/g,'').length;return Math.min(16000,Math.max(7000,5000+t*45))}
+function tick(){clearTimeout(tm);if(!on)return;tm=setTimeout(()=>{if(!on)return;if(cur>=S.length-1){const a=S[cur];a.classList.remove('on');cur=-1;go0()}else go(cur+1);tick()},dur())}
+function go0(){S[0].classList.add('on');cur=0;build(S[0]);upd()}
+function set(v){on=v;btn.textContent=on?'❚❚ 暫停':'▶ 自動播放';tick()}
+btn.onclick=e=>{e.stopPropagation();set(!on)};
+['keydown','touchstart'].forEach(ev=>addEventListener(ev,e=>{if(on&&e.target!==btn&&!(e.key==='a'||e.key==='A'))set(false)},{capture:true}));
+document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>{if(on)set(false)},{capture:true}));
+addEventListener('keydown',e=>{if(e.key==='a'||e.key==='A')set(!on)});
+set(q.has('auto'));
+})();
 </script></body></html>
