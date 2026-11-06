@@ -1389,7 +1389,7 @@ function build(s){s.classList.remove('built');void s.offsetWidth;s.querySelector
 function go(n){if(n<0||n>=S.length||n===cur||busy)return;const a=S[cur],b=S[n],fw=n>cur;const t=(fw?a:b).dataset.transition==='push'?(fw?'push-f':'push-b'):'fade';
 S.forEach(s=>s.classList.remove('push-f','push-b','fade','out'));a.classList.remove('on');a.classList.add('out',t);b.classList.add('on',t);build(b);busy=true;setTimeout(()=>{a.classList.remove('out',t);b.classList.remove(t);busy=false},720);cur=n;upd()}
 function upd(){if(!document.getElementById('bar'))return;document.getElementById('bar').style.width=((cur+1)/S.length*100)+'%';document.getElementById('num').textContent=(cur+1)+' / '+S.length;history.replaceState(null,'','#'+(cur+1))}
-addEventListener('keydown',e=>{if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();go(cur+1)}else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(cur-1)}else if(e.key==='Home')go(0);else if(e.key==='End')go(S.length-1);else if(e.key==='f'||e.key==='F')fs()});
+addEventListener('keydown',e=>{if(document.body.classList.contains('editing')||(e.target&&(e.target.isContentEditable||/INPUT|TEXTAREA/.test(e.target.tagName))))return;if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();go(cur+1)}else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(cur-1)}else if(e.key==='Home')go(0);else if(e.key==='End')go(S.length-1);else if(e.key==='f'||e.key==='F')fs()});
 document.getElementById('next').onclick=()=>go(cur+1);document.getElementById('prev').onclick=()=>go(cur-1);
 let tx=null;addEventListener('touchstart',e=>tx=e.touches[0].clientX,{passive:true});addEventListener('touchend',e=>{if(tx===null)return;const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>40)go(cur+(d<0?1:-1));tx=null});
 function fs(){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{})}
@@ -1407,7 +1407,7 @@ return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AE
 if(!isP){
   const _go=go; go=function(n){_go(n); bc&&bc.postMessage({cur})};
   bc&&(bc.onmessage=e=>{if(e.data.goto!==undefined)go(e.data.goto); if(e.data.ping)bc.postMessage({cur})});
-  addEventListener('keydown',e=>{if(e.key==='s'||e.key==='S')window.open(location.pathname+'?presenter#'+(cur+1),'dm-presenter','width=1100,height=760')});
+  addEventListener('keydown',e=>{if(document.body.classList.contains('editing')||(e.target&&(e.target.isContentEditable||/INPUT|TEXTAREA/.test(e.target.tagName))))return;if(e.key==='s'||e.key==='S')window.open(location.pathname+'?presenter#'+(cur+1),'dm-presenter','width=1100,height=760')});
 }else{
   document.body.innerHTML='<div id="pw" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0d0620;color:#fff;font-family:Noto Sans TC,sans-serif"><form id="f" style="display:flex;gap:12px"><input id="p" type="password" placeholder="講者密碼" autofocus style="font-size:20px;padding:10px 14px;border-radius:10px;border:0"><button style="font-size:18px;padding:10px 18px;border-radius:10px;border:0;background:#E8409B;color:#fff">進入</button></form></div>';
   document.title='講者模式';
@@ -1428,4 +1428,107 @@ if(!isP){
   function show(){document.getElementById('pg').textContent=(c+1)+' / '+D.n.length;document.getElementById('cur').textContent=D.t[c];document.getElementById('nt').textContent=D.n[c]||'（本頁無講稿）';document.getElementById('nx').textContent=c+1<D.n.length?'下一頁：'+D.t[c+1]:'最後一頁'}
   bc&&(bc.onmessage=e=>{if(e.data.cur!==undefined&&D){c=e.data.cur;show()}});
 }
+</script>
+<script id="dm-editor">
+(function(){
+if(!new URLSearchParams(location.search).has('edit'))return;
+const OWNER='datamana-totalife',REPO='datamana-totalife.github.io',PATH='index.html';
+let PW=null,NOTES=null,dirty=false;
+const css=document.createElement('style');css.id='dm-edit-css';css.textContent=`
+body.editing{overflow:auto;background:#2a2340}
+.editing [data-build-in]{opacity:1!important;animation:none!important}
+.editing .slide.on{animation:none!important}
+.editing .nav,.editing #fs,.editing #num{display:none!important}
+.editing [contenteditable=true]{outline:1px dashed rgba(232,64,155,.0);cursor:text}
+.editing [contenteditable=true]:hover{outline:2px dashed rgba(232,64,155,.7)}
+.editing [contenteditable=true]:focus{outline:2px solid #E8409B;background:rgba(255,255,255,.06)}
+.editing .slide img{cursor:pointer}.editing .slide img:hover{outline:3px dashed #FFD54A}
+#dmbar{position:fixed;left:0;right:0;top:0;height:56px;z-index:50;background:#1E0F3D;color:#fff;display:flex;align-items:center;gap:8px;padding:0 14px;font:500 15px 'Noto Sans TC',sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+#dmbar button{font:600 14px 'Noto Sans TC',sans-serif;border:0;border-radius:8px;padding:8px 12px;cursor:pointer;background:#3A2A6E;color:#fff}
+#dmbar button.p{background:#E8409B}#dmbar .sp{flex:1}#dmmsg{color:#FFD54A}
+#dmnotes{position:fixed;left:0;right:0;bottom:0;height:200px;z-index:50;background:#140a2e;border-top:2px solid #4A27D5;display:flex;flex-direction:column}
+#dmnotes label{color:#BD99EE;font:600 13px 'Noto Sans TC',sans-serif;padding:8px 14px 4px}
+#dmnotes textarea{flex:1;margin:0 14px 12px;border-radius:8px;border:0;padding:10px;font:16px/1.6 'Noto Sans TC',sans-serif;background:#F5F2FB;color:#1E0F3D;resize:none}
+#dmlogin{position:fixed;inset:0;z-index:60;background:#0d0620;display:flex;align-items:center;justify-content:center;font-family:'Noto Sans TC',sans-serif}
+#dmlogin form{display:flex;flex-direction:column;gap:12px;width:360px;color:#fff}
+#dmlogin input{font-size:18px;padding:10px 14px;border-radius:10px;border:0}
+#dmlogin button{font-size:17px;padding:10px;border-radius:10px;border:0;background:#E8409B;color:#fff;cursor:pointer}
+#dmdlg{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+#dmdlg>div{background:#fff;color:#1E0F3D;border-radius:14px;padding:24px;width:560px;font:15px/1.7 'Noto Sans TC',sans-serif}
+#dmdlg input{width:100%;font-size:15px;padding:8px;border:1px solid #ccc;border-radius:8px;margin:8px 0}
+#dmdlg button{font:600 14px 'Noto Sans TC',sans-serif;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;background:#4A27D5;color:#fff;margin-right:8px}
+`;document.head.appendChild(css);
+const login=document.createElement('div');login.id='dmlogin';
+login.innerHTML='<form><div style="font-size:22px;font-weight:900">簡報編輯模式</div><input id="dmpw" type="password" placeholder="編輯密碼" autofocus><button>進入編輯</button><div id="dmerr" style="color:#FF7AB6"></div></form>';
+document.body.appendChild(login);
+login.querySelector('form').onsubmit=async e=>{e.preventDefault();const pw=document.getElementById('dmpw').value;
+ try{const d=await dec(pw);PW=pw;NOTES=d;login.remove();start()}catch(_){document.getElementById('dmerr').textContent='密碼錯誤'}};
+const TXT='h1,h2,h3,p,li,td,th';
+function start(){
+ document.body.classList.add('editing');
+ document.querySelectorAll('.slide').forEach(s=>s.querySelectorAll(TXT).forEach(el=>{if(el.closest('[contenteditable]'))return;if(el.querySelector('ul,ol,table,div'))return;el.contentEditable='true';el.spellcheck=false;el.addEventListener('input',()=>mark())}));
+ document.querySelectorAll('.slide img').forEach(im=>im.addEventListener('click',()=>replaceImg(im)));
+ const bar=document.createElement('div');bar.id='dmbar';
+ bar.innerHTML='<button id="dmprev">◀</button><span id="dmpg"></span><button id="dmnext">▶</button><span style="margin-left:10px;color:#BD99EE">點文字直接改・點圖片可換圖</span><span class="sp"></span><span id="dmmsg"></span><button id="dmview">預覽</button><button id="dmdl">下載檔案</button><button class="p" id="dmpub">儲存並發佈</button>';
+ document.body.appendChild(bar);
+ const np=document.createElement('div');np.id='dmnotes';np.innerHTML='<label>本頁講稿（只有講者模式看得到）</label><textarea id="dmnt"></textarea>';document.body.appendChild(np);
+ document.getElementById('dmnt').addEventListener('input',e=>{NOTES.n[cur]=e.target.value;mark()});
+ document.getElementById('dmprev').onclick=()=>nav(-1);document.getElementById('dmnext').onclick=()=>nav(1);
+ document.getElementById('dmview').onclick=()=>window.open(location.pathname+'#'+(cur+1),'_blank');
+ document.getElementById('dmdl').onclick=download;document.getElementById('dmpub').onclick=publish;
+ window.fit=function(){const st=document.getElementById('stage');const k=Math.min((innerWidth-40)/1920,(innerHeight-56-200-30)/1080);st.style.transform=`translate(-50%,-50%) scale(${k})`;st.style.top=(56+15+1080*k/2)+'px'};
+ addEventListener('resize',window.fit);window.fit();sync();
+ addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+ const dlg=document.createElement('div');dlg.id='dmdlg';document.body.appendChild(dlg);
+}
+function nav(d){const n=cur+d;if(n<0||n>=S.length)return;S[cur].classList.remove('on');cur=n;S[cur].classList.add('on');sync()}
+function sync(){document.getElementById('dmpg').textContent=(cur+1)+' / '+S.length;document.getElementById('dmnt').value=NOTES.n[cur]||'';try{history.replaceState(null,'','?edit#'+(cur+1))}catch(_){}}
+function mark(){dirty=true;document.getElementById('dmmsg').textContent='有未儲存的修改'}
+function replaceImg(im){const f=document.createElement('input');f.type='file';f.accept='image/*';f.onchange=()=>{const file=f.files[0];if(!file)return;const img=new Image();const r=new FileReader();
+ r.onload=()=>{img.onload=()=>{const max=1600;let w=img.width,h=img.height;if(w>max){h=h*max/w;w=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);im.src=c.toDataURL('image/jpeg',0.85);mark()};img.src=r.result};r.readAsDataURL(file)};f.click()}
+function b64e(u8){let s='';for(let i=0;i<u8.length;i+=32768)s+=String.fromCharCode.apply(null,u8.subarray(i,i+32768));return btoa(s)}
+async function enc(obj,pw){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+ const k0=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+ const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},k0,{name:'AES-GCM',length:256},false,['encrypt']);
+ const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode(JSON.stringify(obj))));
+ return {s:b64e(salt),i:b64e(iv),c:b64e(ct)}}
+async function build(){
+ // refresh slide titles for presenter
+ S.forEach((s,i)=>{const t=s.querySelector('h2')||s.querySelector('h1');if(t)NOTES.t[i]=t.textContent.trim()});
+ const doc=document.documentElement.cloneNode(true);
+ ['#dmbar','#dmnotes','#dmlogin','#dmdlg','#dm-edit-css'].forEach(q=>doc.querySelectorAll(q).forEach(e=>e.remove()));
+ doc.querySelector('body').classList.remove('editing');if(!doc.querySelector('body').className)doc.querySelector('body').removeAttribute('class');
+ doc.querySelectorAll('[contenteditable]').forEach(e=>{e.removeAttribute('contenteditable');e.removeAttribute('spellcheck')});
+ doc.querySelectorAll('.slide').forEach(s=>{s.className='slide'});
+ doc.querySelectorAll('[data-build-in]').forEach(e=>{e.style.removeProperty('animation-name');e.style.removeProperty('animation-delay')});
+ const st=doc.querySelector('#stage');st.removeAttribute('style');
+ const bar=doc.querySelector('#bar');if(bar)bar.removeAttribute('style');const num=doc.querySelector('#num');if(num)num.textContent='';
+ let html='<!doctype html>\n'+doc.outerHTML;
+ const E=await enc(NOTES,PW);
+ html=html.replace(/const ENC=\{[^}]*\};/,'const ENC='+JSON.stringify(E)+';');
+ return html}
+async function download(){const html=await build();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download='index.html';a.click();
+ showDlg(`<b>已下載 index.html</b><br>請到 GitHub 上傳覆蓋原檔：<br>1. 點下面按鈕開啟上傳頁<br>2. 把剛下載的 index.html 拖進去<br>3. 按綠色 Commit changes，約 1 分鐘後網站更新<br><br><button onclick="window.open('https://github.com/${OWNER}/${REPO}/upload/main','_blank')">開啟上傳頁</button><button onclick="document.getElementById('dmdlg').style.display='none'">關閉</button>`)}
+function showDlg(h){const d=document.getElementById('dmdlg');d.innerHTML='<div>'+h+'</div>';d.style.display='flex'}
+async function publish(){
+ let tok=localStorage.getItem('dm_gh_token');
+ if(!tok){showDlg(`<b>第一次發佈：設定 GitHub 金鑰（每台電腦只要一次）</b><br>
+ 1. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">點這裡建立金鑰</a><br>
+ 2. Resource owner 選 <b>${OWNER}</b>；Repository access 選 Only select → <b>${REPO}</b><br>
+ 3. Permissions → Repository → <b>Contents</b> 設為 Read and write，按 Generate token，複製<br>
+ <input id="dmtok" placeholder="貼上金鑰 github_pat_…"><button id="dmtoksave">儲存並發佈</button><button onclick="document.getElementById('dmdlg').style.display='none'">取消</button><br>
+ <span style="color:#888;font-size:13px">沒有金鑰也可以按「下載檔案」，再手動上傳到 GitHub。</span>`);
+  document.getElementById('dmtoksave').onclick=()=>{const v=document.getElementById('dmtok').value.trim();if(!v)return;localStorage.setItem('dm_gh_token',v);document.getElementById('dmdlg').style.display='none';publish()};return}
+ const msg=document.getElementById('dmmsg');msg.textContent='發佈中…';
+ try{
+  const html=await build();
+  const api=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
+  const H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json'};
+  const g=await fetch(api+'?ref=main',{headers:H});if(!g.ok)throw new Error('讀取失敗 '+g.status);const sha=(await g.json()).sha;
+  const p=await fetch(api,{method:'PUT',headers:H,body:JSON.stringify({message:'更新簡報內容',content:b64e(new TextEncoder().encode(html)),sha,branch:'main'})});
+  if(!p.ok){const t=await p.text();if(p.status===401||p.status===403){localStorage.removeItem('dm_gh_token')}throw new Error('發佈失敗 '+p.status+' '+t.slice(0,120))}
+  dirty=false;msg.textContent='已發佈，約 1 分鐘後網站更新';
+ }catch(err){msg.textContent='';showDlg('<b>發佈沒有成功</b><br>'+err.message+'<br><br>可以先按「下載檔案」手動上傳。<br><button onclick="document.getElementById(\'dmdlg\').style.display=\'none\'">關閉</button>')}
+}
+})();
 </script></body></html>
