@@ -1666,7 +1666,7 @@ async function publish(){
  try{
   const html=await build();
   const api=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
-  const H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json'};
+  const H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json','Content-Type':'application/json'};
   const g=await fetch(api+'?ref=main',{headers:H});if(!g.ok)throw new Error('讀取失敗 '+g.status);const sha=(await g.json()).sha;
   const p=await fetch(api,{method:'PUT',headers:H,body:JSON.stringify({message:'更新簡報內容',content:b64e(new TextEncoder().encode(html)),sha,branch:'main'})});
   if(!p.ok){const t=await p.text();if(p.status===401||p.status===403){localStorage.removeItem('dm_gh_token')}throw new Error('發佈失敗 '+p.status+' '+t.slice(0,120))}
